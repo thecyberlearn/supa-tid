@@ -54,6 +54,24 @@
       70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
       100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
     }
+
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes slideOutRight {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: 0; }
+    }
+
+    .toast-enter {
+      animation: slideInRight 0.3s ease-out;
+    }
+
+    .toast-exit {
+      animation: slideOutRight 0.3s ease-in;
+    }
   </style>
 </head>
 <body>
@@ -114,11 +132,12 @@
         </div>
         <div class="flex gap-2 sm:gap-3">
           <button 
+            id="searchButton"
             onclick="performSearch()" 
             class="flex-1 sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-3 py-2.5 sm:px-6 sm:py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-1 sm:gap-2 min-w-[90px] sm:min-w-[120px] text-sm sm:text-base"
           >
-            <i class="fas fa-search text-xs sm:text-sm"></i>
-            <span>Search</span>
+            <i id="searchIcon" class="fas fa-search text-xs sm:text-sm"></i>
+            <span id="searchText">Search</span>
           </button>
           <button 
             onclick="openCreateModal()" 
@@ -155,11 +174,11 @@
           <i class="fas fa-sliders-h text-gray-600"></i>
           <h3 class="text-sm font-semibold text-gray-700">Product Mapping</h3>
           <button onclick="toggleAdvancedPanel()" class="sm:hidden ml-auto p-1 text-gray-500 hover:text-gray-700">
-            <i id="advancedToggleIcon" class="fas fa-chevron-down text-xs"></i>
+            <i id="advancedToggleIcon" class="fas fa-chevron-right text-xs"></i>
           </button>
         </div>
         
-        <div id="advancedContent" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4">
+        <div id="advancedContent" class="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4">
           <!-- Search Type -->
           <div>
             <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Search Type</label>
@@ -200,7 +219,7 @@
         </div>
         
         <!-- Advanced Search Actions -->
-        <div id="advancedActions" class="flex gap-2 sm:gap-3">
+        <div id="advancedActions" class="hidden sm:flex gap-2 sm:gap-3">
           <button 
             onclick="performProductMatching()" 
             class="flex-auto bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 sm:px-6 sm:py-2.5 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 text-sm sm:text-base"
@@ -288,7 +307,7 @@
             <p id="resultsCount" class="text-sm text-gray-600"></p>
           </div>
           
-          <div id="resultsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 custom-scrollbar max-h-[600px] overflow-y-auto"></div>
+          <div id="resultsContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6 custom-scrollbar max-h-[600px] overflow-y-auto"></div>
         </div>
       </div>
 
@@ -302,6 +321,11 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2">
+    <!-- Toast notifications will be dynamically added here -->
   </div>
 
   <!-- Edit Modal -->
@@ -419,6 +443,93 @@ function clearCache() {
   queryCache.clear();
 }
 
+function setSearchButtonLoading(isLoading) {
+  const button = document.getElementById('searchButton');
+  const icon = document.getElementById('searchIcon');
+  const text = document.getElementById('searchText');
+  
+  if (isLoading) {
+    button.disabled = true;
+    button.classList.add('opacity-75', 'cursor-not-allowed');
+    button.classList.remove('hover:bg-blue-700');
+    icon.className = 'fas fa-spinner fa-spin text-xs sm:text-sm';
+    text.textContent = 'Searching...';
+  } else {
+    button.disabled = false;
+    button.classList.remove('opacity-75', 'cursor-not-allowed');
+    button.classList.add('hover:bg-blue-700');
+    icon.className = 'fas fa-search text-xs sm:text-sm';
+    text.textContent = 'Search';
+  }
+}
+
+function showToast(message, type = 'success', duration = 4000) {
+  const container = document.getElementById('toastContainer');
+  const toastId = 'toast-' + Date.now();
+  
+  // Determine colors and icon based on type
+  const config = {
+    success: {
+      bgColor: 'bg-green-500',
+      icon: 'fas fa-check-circle',
+      borderColor: 'border-green-400'
+    },
+    error: {
+      bgColor: 'bg-red-500',
+      icon: 'fas fa-exclamation-circle',
+      borderColor: 'border-red-400'
+    },
+    warning: {
+      bgColor: 'bg-yellow-500',
+      icon: 'fas fa-exclamation-triangle',
+      borderColor: 'border-yellow-400'
+    },
+    info: {
+      bgColor: 'bg-blue-500',
+      icon: 'fas fa-info-circle',
+      borderColor: 'border-blue-400'
+    }
+  };
+
+  const { bgColor, icon, borderColor } = config[type] || config.success;
+  
+  // Create toast element
+  const toast = document.createElement('div');
+  toast.id = toastId;
+  toast.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[320px] max-w-md border-l-4 ${borderColor} toast-enter`;
+  
+  toast.innerHTML = `
+    <i class="${icon} text-lg"></i>
+    <span class="flex-1 text-sm font-medium">${message}</span>
+    <button onclick="removeToast('${toastId}')" class="text-white hover:text-gray-200 transition-colors">
+      <i class="fas fa-times text-sm"></i>
+    </button>
+  `;
+  
+  // Add to container
+  container.appendChild(toast);
+  
+  // Auto remove after duration
+  setTimeout(() => {
+    removeToast(toastId);
+  }, duration);
+}
+
+function removeToast(toastId) {
+  const toast = document.getElementById(toastId);
+  if (toast) {
+    toast.classList.remove('toast-enter');
+    toast.classList.add('toast-exit');
+    
+    // Remove from DOM after animation
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  }
+}
+
 function openModal(id) {
   document.getElementById(id).classList.remove("hidden");
   document.body.style.overflow = 'hidden';
@@ -427,6 +538,31 @@ function openModal(id) {
 function closeModal(id) {
   document.getElementById(id).classList.add("hidden");
   document.body.style.overflow = 'auto';
+}
+
+function toggleAdvancedPanel() {
+  const content = document.getElementById('advancedContent');
+  const actions = document.getElementById('advancedActions');
+  const icon = document.getElementById('advancedToggleIcon');
+  
+  // Check if currently hidden (using Tailwind's hidden class)
+  if (content.classList.contains('hidden')) {
+    // Show content
+    content.classList.remove('hidden');
+    content.classList.add('grid');
+    actions.classList.remove('hidden');
+    actions.classList.add('flex');
+    icon.classList.remove('fa-chevron-right');
+    icon.classList.add('fa-chevron-down');
+  } else {
+    // Hide content
+    content.classList.remove('grid');
+    content.classList.add('hidden');
+    actions.classList.remove('flex');
+    actions.classList.add('hidden');
+    icon.classList.remove('fa-chevron-down');
+    icon.classList.add('fa-chevron-right');
+  }
 }
 
 function setSearchQuery(query) {
@@ -462,11 +598,11 @@ async function submitModalEdit() {
     const { error } = await client.from(editContext.table).update(update).eq("id", editContext.id);
     if (error) {
       console.error('Update error:', error);
-      alert("❌ Update failed: " + error.message);
+      showToast("Update failed: " + error.message, 'error');
       return;
     }
     
-    alert("✅ Updated!");
+    showToast("Record updated successfully!", 'success');
     clearCache(); // Clear cache after data modification
     closeModal("editModal");
     
@@ -476,7 +612,7 @@ async function submitModalEdit() {
     }
   } catch (error) {
     console.error('Submit edit error:', error);
-    alert("❌ Update failed: " + error.message);
+    showToast("Update failed: " + error.message, 'error');
   }
 }
 
@@ -537,8 +673,8 @@ function renderRecord(r) {
       <div class='mb-2 sm:mb-3'>
         <span class='inline-flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-xs font-medium ${badge.color}'>
           <i class='${badge.icon} text-xs'></i>
-          <span class='hidden xs:inline'>${badge.label}</span>
-          <span class='xs:hidden'>${badge.label.slice(0,3)}</span>
+          <span class='hidden sm:inline'>${badge.label}</span>
+          <span class='sm:hidden'>${badge.label.slice(0,3).toUpperCase()}</span>
         </span>
       </div>
       
@@ -768,6 +904,11 @@ async function performSearch(loadMore = false) {
     return;
   }
   
+  // Show loading state on search button
+  if (!loadMore) {
+    setSearchButtonLoading(true);
+  }
+  
   // Reset pagination if new search
   if (!loadMore || searchState.query !== query) {
     searchState = { query, page: 0, hasMore: false, results: [] };
@@ -850,6 +991,11 @@ async function performSearch(loadMore = false) {
   } catch (e) {
     console.error('Search error:', e);
     showErrorMessage(`Search failed: ${e.message}`);
+  } finally {
+    // Hide loading state on search button
+    if (!loadMore) {
+      setSearchButtonLoading(false);
+    }
   }
 }
 
@@ -1295,7 +1441,7 @@ function sortResults() {
 
 function exportResults() {
   if (!searchState.results || searchState.results.length === 0) {
-    alert("No results to export");
+    showToast("No results to export", 'warning');
     return;
   }
   
@@ -1326,9 +1472,11 @@ function exportResults() {
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
+    
+    showToast(`Exported ${searchState.results.length} records successfully`, 'success');
   } catch (error) {
     console.error('Export error:', error);
-    alert('Export failed: ' + error.message);
+    showToast('Export failed: ' + error.message, 'error');
   }
 }
 
@@ -1379,7 +1527,7 @@ async function deleteRecord(btn) {
     
     if (!table || !id) {
       console.error('Missing table or id data');
-      alert("❌ Could not delete: missing record information");
+      showToast("Could not delete: missing record information", 'error');
       return;
     }
     
@@ -1388,11 +1536,11 @@ async function deleteRecord(btn) {
     const { error } = await client.from(table).delete().eq("id", id);
     if (error) {
       console.error('Delete error:', error);
-      alert("❌ Delete failed: " + error.message);
+      showToast("Delete failed: " + error.message, 'error');
       return;
     }
     
-    alert("🗑️ Deleted");
+    showToast("Record deleted successfully", 'success');
     clearCache(); // Clear cache after data modification
     
     // Refresh current search if one exists
@@ -1401,7 +1549,7 @@ async function deleteRecord(btn) {
     }
   } catch (error) {
     console.error('Delete record error:', error);
-    alert("❌ Delete failed: " + error.message);
+    showToast("Delete failed: " + error.message, 'error');
   }
 }
 
@@ -1487,12 +1635,12 @@ async function handleCreateSubmit(event) {
     const { data: result, error } = await client.from(table).insert([data]);
     if (error) {
       console.error('Create error details:', error);
-      alert("❌ Create failed: " + (error.message || JSON.stringify(error)));
+      showToast("Create failed: " + (error.message || JSON.stringify(error)), 'error');
       return;
     }
     
     console.log('Insert successful:', result);
-    alert("✅ Record created successfully!");
+    showToast("Record created successfully!", 'success');
     clearCache();
     closeCreateModal();
     
@@ -1502,7 +1650,7 @@ async function handleCreateSubmit(event) {
     }
   } catch (error) {
     console.error('Create record error:', error);
-    alert("❌ Create failed: " + (error.message || JSON.stringify(error)));
+    showToast("Create failed: " + (error.message || JSON.stringify(error)), 'error');
   }
 }
 
