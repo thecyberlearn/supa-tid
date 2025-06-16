@@ -94,9 +94,15 @@
             <p class="text-sm text-white">Last updated</p>
             <p class="font-semibold text-white">6:08:40 AM</p>
           </div>
-          <div class="flex items-center gap-2">
-            <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <span class="text-sm text-green-600 font-medium text-white">Online</span>
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+              <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span class="text-sm text-green-600 font-medium text-white">Online</span>
+            </div>
+            <button onclick="logout()" class="text-sm text-white/80 hover:text-white px-3 py-1 rounded-lg hover:bg-white/10 transition-colors">
+              <i class="fas fa-sign-out-alt mr-1"></i>
+              Logout
+            </button>
           </div>
         </div>
       </div>
@@ -323,6 +329,56 @@
     </div>
   </div>
 
+  <!-- Login Screen -->
+  <div id="loginScreen" class="fixed inset-0 bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4">
+      <div class="text-center mb-8">
+        <div class="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+          <i class="fas fa-ship text-white text-2xl"></i>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-800">Trade Intelligence</h1>
+        <p class="text-gray-600">Please sign in to continue</p>
+      </div>
+      
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Username</label>
+            <input 
+              type="text" 
+              id="username" 
+              required
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              placeholder="Enter username"
+            />
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+            <input 
+              type="password" 
+              id="password" 
+              required
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              placeholder="Enter password"
+            />
+          </div>
+          
+          <div id="loginError" class="hidden bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
+            Invalid username or password
+          </div>
+          
+          <button 
+            type="submit" 
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors"
+          >
+            Sign In
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2">
     <!-- Toast notifications will be dynamically added here -->
@@ -388,6 +444,93 @@
   </div>
 
 <script>
+// n8n Authentication System
+const N8N_AUTH_WEBHOOK = 'https://m8taq6tk.rpcld.cc/webhook/login';
+
+function checkAuthentication() {
+  const isAuthenticated = localStorage.getItem('authenticated');
+  const loginScreen = document.getElementById('loginScreen');
+  
+  if (isAuthenticated === 'true') {
+    loginScreen.style.display = 'none';
+    return true;
+  } else {
+    loginScreen.style.display = 'flex';
+    return false;
+  }
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const errorDiv = document.getElementById('loginError');
+  const submitButton = event.target.querySelector('button[type="submit"]');
+  
+  // Show loading state
+  const originalButtonText = submitButton.innerHTML;
+  submitButton.disabled = true;
+  submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Signing In...';
+  
+  try {
+    console.log('Attempting login with n8n webhook...');
+    
+    const response = await fetch(N8N_AUTH_WEBHOOK, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        "username": username,
+        "password": password
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    console.log('Authentication response:', result);
+    
+    if (result.success === true) {
+      // Successful login
+      localStorage.setItem('authenticated', 'true');
+      localStorage.setItem('currentUser', result.username || username);
+      document.getElementById('loginScreen').style.display = 'none';
+      errorDiv.classList.add('hidden');
+      
+      // Show success message
+      showToast(`Welcome back, ${result.username || username}!`, 'success');
+      
+      // Initialize dashboard
+      initializeDashboard();
+    } else {
+      // Failed login
+      errorDiv.textContent = result.message || 'Invalid username or password';
+      errorDiv.classList.remove('hidden');
+      document.getElementById('password').value = '';
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    errorDiv.textContent = 'Login failed. Please check your connection and try again.';
+    errorDiv.classList.remove('hidden');
+    document.getElementById('password').value = '';
+  } finally {
+    // Reset button state
+    submitButton.disabled = false;
+    submitButton.innerHTML = originalButtonText;
+  }
+}
+
+function logout() {
+  localStorage.removeItem('authenticated');
+  localStorage.removeItem('currentUser');
+  location.reload();
+}
+
 // Check if required dependencies are loaded
 if (typeof supabase === 'undefined') {
   console.error('Supabase library not loaded');
@@ -787,6 +930,7 @@ async function parseQueryWithAI(naturalQuery) {
     // Fallback to simple keyword-based parsing
     const fallbackResult = parseQueryFallback(naturalQuery);
     console.log('🔄 Local fallback parsing result:', fallbackResult);
+    console.log('🔄 Fallback filters:', fallbackResult.filters);
     return fallbackResult;
   }
 }
@@ -819,13 +963,15 @@ function parseQueryFallback(query) {
     }
   }
   
-  // Product/brand filters
-  const products = ["pepsi", "cosmetic", "fmcg", "food", "beverage"];
-  for (const product of products) {
-    if (lowerQuery.includes(product)) {
-      filters.push({ field: "brands", operator: "ilike", value: `%${product}%` });
-      filters.push({ field: "category", operator: "ilike", value: `%${product}%` });
-      break;
+  // Product/brand filters (only for buyer/seller tables)
+  if (table !== "gulfood") {
+    const products = ["pepsi", "cosmetic", "fmcg", "food", "beverage"];
+    for (const product of products) {
+      if (lowerQuery.includes(product)) {
+        filters.push({ field: "brands", operator: "ilike", value: `%${product}%` });
+        filters.push({ field: "category", operator: "ilike", value: `%${product}%` });
+        break;
+      }
     }
   }
   
@@ -912,6 +1058,10 @@ async function performSearch(loadMore = false) {
   // Reset pagination if new search
   if (!loadMore || searchState.query !== query) {
     searchState = { query, page: 0, hasMore: false, results: [] };
+    // Clear cache for new searches to ensure fresh data
+    if (searchState.query !== query) {
+      clearCache();
+    }
   }
   
   // Show results section, hide initial state and product mapping
@@ -931,6 +1081,9 @@ async function performSearch(loadMore = false) {
 
   try {
     const ai = await parseQueryWithAI(query);
+    console.log('🔍 Search query:', query);
+    console.log('🔍 AI parsing result:', ai);
+    
     let newResults = [];
     let totalCount = 0;
 
@@ -938,12 +1091,22 @@ async function performSearch(loadMore = false) {
       const [buyerRes, sellerRes, gulfoodRes] = await Promise.all([
         fetchFrom("buyer", ai.filters, searchState.page),
         fetchFrom("seller", ai.filters, searchState.page),
-        fetchFrom("gulfood", ai.filters, searchState.page)
+        fetchFrom("gulfood", [], searchState.page) // No filters for gulfood since it has different fields
       ]);
       
       newResults = [...buyerRes.data, ...sellerRes.data, ...gulfoodRes.data];
       totalCount = buyerRes.count + sellerRes.count + gulfoodRes.count;
       searchState.hasMore = buyerRes.hasMore || sellerRes.hasMore || gulfoodRes.hasMore;
+    } else if (ai.table === "gulfood") {
+      // For gulfood table, don't apply country/brand/category filters
+      const gulfoodFilters = ai.filters.filter(f => 
+        ["company_name", "address", "phone_number", "mail_id", "website"].includes(f.field)
+      );
+      console.log('🔍 Gulfood filters:', gulfoodFilters);
+      const result = await fetchFrom(ai.table, gulfoodFilters, searchState.page);
+      newResults = result.data;
+      totalCount = result.count;
+      searchState.hasMore = result.hasMore;
     } else {
       const result = await fetchFrom(ai.table, ai.filters, searchState.page);
       newResults = result.data;
@@ -1073,17 +1236,17 @@ let countrySuggestionsTimeout;
 
 async function loadAllCountries() {
   try {
-    // Fetch unique countries from all tables
-    const [buyerCountries, sellerCountries, gulfoodCountries] = await Promise.all([
+    // Fetch unique countries from buyer and seller tables only
+    // Gulfood table doesn't have a 'country' field - it uses 'address'
+    const [buyerCountries, sellerCountries] = await Promise.all([
       client.from('buyer').select('country').not('country', 'is', null),
-      client.from('seller').select('country').not('country', 'is', null),
-      client.from('gulfood').select('country').not('country', 'is', null)
+      client.from('seller').select('country').not('country', 'is', null)
     ]);
     
     const countrySet = new Set();
     
-    // Add countries from all tables
-    [...(buyerCountries.data || []), ...(sellerCountries.data || []), ...(gulfoodCountries.data || [])]
+    // Add countries from buyer and seller tables
+    [...(buyerCountries.data || []), ...(sellerCountries.data || [])]
       .forEach(item => {
         if (item.country && item.country.trim()) {
           countrySet.add(item.country.trim());
@@ -1654,8 +1817,7 @@ async function handleCreateSubmit(event) {
   }
 }
 
-// Initialize
-document.addEventListener('DOMContentLoaded', function() {
+function initializeDashboard() {
   try {
     console.log('Initializing dashboard...');
     
@@ -1682,6 +1844,14 @@ document.addEventListener('DOMContentLoaded', function() {
   } catch (error) {
     console.error('Initialization error:', error);
     alert('Failed to initialize dashboard. Please refresh the page.');
+  }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+  // Check authentication first
+  if (checkAuthentication()) {
+    initializeDashboard();
   }
 });
 </script>
